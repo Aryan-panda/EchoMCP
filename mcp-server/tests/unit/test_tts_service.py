@@ -1,25 +1,33 @@
 import io
 import wave
+import sys
 import importlib.util
 from pathlib import Path
 from fastapi.testclient import TestClient
 
-tts_app_path = Path(__file__).resolve().parents[3] / "tts" / "app.py"
+tts_dir = Path(__file__).resolve().parents[3] / "tts"
+sys.path.insert(0, str(tts_dir))
+
+tts_app_path = tts_dir / "app.py"
 spec = importlib.util.spec_from_file_location("tts_service_app", str(tts_app_path))
 tts_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tts_module)
 
 tts_app = tts_module.app
-generate_mock_wav = tts_module.generate_mock_wav
+engine = tts_module.engine
 
-def test_generate_mock_wav_valid_audio():
-    wav_bytes = generate_mock_wav(duration_seconds=1.0, sample_rate=22050)
+def test_engine_synthesize_speech_valid_audio():
+    wav_bytes, duration = engine.synthesize_speech(
+        text="Testing engine synthesis output directly.",
+        speed=1.0
+    )
     assert len(wav_bytes) > 0
+    assert duration > 0.0
     with wave.open(io.BytesIO(wav_bytes), "rb") as wf:
         assert wf.getnchannels() == 1
         assert wf.getsampwidth() == 2
         assert wf.getframerate() == 22050
-        assert wf.getnframes() == 22050
+        assert wf.getnframes() > 0
 
 def test_tts_health_and_status():
     client = TestClient(tts_app)

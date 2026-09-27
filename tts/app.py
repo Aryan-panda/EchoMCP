@@ -1,86 +1,102 @@
-import io
-import math
-import struct
-import wave
+import os
 import logging
+from pathlib import Path
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Response, status
 from pydantic import BaseModel, Field
+from engine import CosyVoiceEngine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-logger = logging.getLogger("tts-service")
+logger = logging.getLogger("echomcp-tts")
 
-app = FastAPI(title="EchoMCP TTS Engine", version="1.0.0")
+app = FastAPI(title="EchoMCP CosyVoice Engine", version="1.0.0")
+
+# Initialize synthesizer engine
+device = os.getenv("TTS_DEVICE", "cpu")
+models_dir = Path(os.getenv("MODELS_DIR", "models" if Path("models").exists() else "tts/models"))
+voices_dir = Path(os.getenv("VOICES_DIR", "voices" if Path("voices").exists() else "tts/voices"))
+
+engine = CosyVoiceEngine(models_dir=models_dir, device=device)
 
 class SynthesizeRequest(BaseModel):
-    text: str = Field(..., min_length=1)
+    text: str = Field(..., min_length=1, max_length=5000)
     voice_id: str = Field(default="1")
     speed: float = Field(default=1.0, ge=0.5, le=2.0)
     format: str = Field(default="wav")
     emotion: Optional[str] = None
-
-def generate_mock_wav(duration_seconds: float = 2.0, sample_rate: int = 22050, freq: float = 440.0) -> bytes:
-    """Generate a valid, non-empty PCM 16-bit Mono WAV file in memory."""
-    num_samples = int(duration_seconds * sample_rate)
-    buffer = io.BytesIO()
-    
-    with wave.open(buffer, "wb") as wav_file:
-        wav_file.setnchannels(1)      # Mono
-        wav_file.setsampwidth(2)      # 16-bit
-        wav_file.setframerate(sample_rate)
-        
-        frames = bytearray()
-        for i in range(num_samples):
-            # Generate a soft decayed tone
-            envelope = math.exp(-3.0 * (i / num_samples))
-            val = int(envelope * 8000.0 * math.sin(2.0 * math.pi * freq * (i / sample_rate)))
-            frames.extend(struct.pack("<h", max(-32768, min(32767, val))))
-            
-        wav_file.writeframes(frames)
-        
-    return buffer.getvalue()
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 @app.get("/status")
-def status():
+def status_endpoint():
     return {
-        "provider": "mock",
-        "status": "ready",
-        "model_loaded": True
+        "provider": "cosyvoice",
+        "status": "ready" if engine.model_loaded else "loading",
+        "model_loaded": engine.model_loaded,
+        "device": engine.device
     }
 
 @app.post("/synthesize")
 def synthesize(req: SynthesizeRequest):
-    logger.info(f"Synthesizing text: '{req.text[:40]}...' for voice: {req.voice_id} (speed: {req.speed})")
-    
-    # Calculate approximate duration based on word count: ~3 words per second / speed
-    words = len(req.text.split())
-    duration = max(1.0, min(30.0, (words / 3.0) / req.speed))
-    
-    # Generate valid WAV audio
-    wav_bytes = generate_mock_wav(duration_seconds=duration, sample_rate=22050)
-    
+    clean_text = req.text.strip()
+    if not clean_text:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Synthesize text cannot be empty or whitespace"
+        )
+
+    # Locate reference voice for Voice ID conditioning
+    ref_path = voices_dir / req.voice_id / "reference.wav"
+
+    try:
+        audio_bytes, duration = engine.synthesize_speech(
+            text=clean_text,
+            reference_wav_path=ref_path if ref_path.exists() else None,
+            speed=req.speed,
+            emotion=req.emotion
+        )
+    except Exception as e:
+        logger.error(f"Synthesis failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Synthesis engine failure: {str(e)}"
+        )
+
     headers = {
-        "X-Audio-Duration": str(round(duration, 2)),
-        "X-Sample-Rate": "22050",
+        "Content-Type": "audio/wav",
+        "X-Audio-Duration": str(duration),
+        "X-Sample-Rate": str(engine.sample_rate),
         "X-Channels": "1"
     }
-    return Response(content=wav_bytes, media_type="audio/wav", headers=headers)
 
-@app.post("/voices/register")
-def register_voice(voice_id: str = "1", name: str = "Voice 1"):
-    logger.info(f"Registered voice profile {voice_id} ({name})")
-    return {"voice_id": voice_id, "name": name, "status": "ready"}
+    logger.info(f"Synthesized {duration}s audio for voice '{req.voice_id}' (text: '{clean_text[:30]}...')")
+    return Response(content=audio_bytes, media_type="audio/wav", headers=headers)
 
 @app.get("/voices")
 def list_voices():
-    return [{"voice_id": "1", "name": "Voice 1", "status": "ready"}]
+    voices = []
+    if voices_dir.exists():
+        for d in voices_dir.iterdir():
+            if d.is_dir() and (d / "reference.wav").exists():
+                voices.append({"voice_id": d.name, "name": f"Voice {d.name}", "status": "ready"})
+    if not voices:
+        voices = [{"voice_id": "1", "name": "Voice 1", "status": "ready"}]
+    return voices
+
+@app.post("/voices/register")
+def register_voice(voice_id: str = "1", name: str = "Voice 1"):
+    target = voices_dir / voice_id
+    target.mkdir(parents=True, exist_ok=True)
+    return {"voice_id": voice_id, "name": name, "status": "ready"}
 
 @app.delete("/voices/{voice_id}")
 def delete_voice(voice_id: str):
-    logger.info(f"Deleted voice profile {voice_id}")
-    return {"voice_id": voice_id, "status": "deleted"}
-
+    target = voices_dir / voice_id
+    if target.exists():
+        ref = target / "reference.wav"
+        if ref.exists():
+            ref.unlink()
+        return {"voice_id": voice_id, "status": "deleted"}
+    return {"voice_id": voice_id, "status": "not_found"}
