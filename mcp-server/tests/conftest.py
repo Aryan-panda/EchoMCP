@@ -47,3 +47,7 @@ def client(mock_tts, test_audio_svc, test_voice_svc):
         yield c
 
     app.dependency_overrides.clear()
+
+@pytest.fixture
+def auth_headers():
+    return {"Authorization": f"Bearer {settings.MCP_AUTH_TOKEN}"}

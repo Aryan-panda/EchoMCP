@@ -13,6 +13,7 @@ logger = logging.getLogger("echomcp.mcp_server")
 mcp_router = APIRouter(tags=["MCP"])
 
 def verify_mcp_auth(authorization: Optional[str]):
+    """Verify Bearer token against configured MCP_AUTH_TOKEN."""
     if not settings.MCP_AUTH_TOKEN:
         return
     if not authorization:
@@ -26,6 +27,21 @@ def verify_mcp_auth(authorization: Optional[str]):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unauthorized: Invalid Bearer token"
         )
+
+@mcp_router.get("/mcp")
+async def handle_mcp_get(authorization: Optional[str] = Header(None)):
+    """
+    GET probe for MCP Streamable HTTP transport.
+    Provides transport info and confirms endpoint availability.
+    """
+    verify_mcp_auth(authorization)
+    return {
+        "transport": "streamable-http",
+        "protocolVersion": "2024-11-05",
+        "server": "grok-voice-bridge",
+        "version": "1.0.0",
+        "status": "ready"
+    }
 
 @mcp_router.post("/mcp")
 async def handle_mcp_endpoint(
@@ -44,7 +60,7 @@ async def handle_mcp_endpoint(
         body = await request.json()
     except Exception:
         return JSONResponse(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             content={
                 "jsonrpc": "2.0",
                 "error": {"code": -32700, "message": "Parse error: Invalid JSON"},
@@ -52,9 +68,29 @@ async def handle_mcp_endpoint(
             }
         )
 
+    if not isinstance(body, dict):
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "jsonrpc": "2.0",
+                "error": {"code": -32600, "message": "Invalid Request: Body must be a JSON object"},
+                "id": None
+            }
+        )
+
     jsonrpc_id = body.get("id")
     method = body.get("method")
     params = body.get("params", {})
+
+    if not method:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "jsonrpc": "2.0",
+                "error": {"code": -32600, "message": "Invalid Request: Missing 'method' field"},
+                "id": jsonrpc_id
+            }
+        )
 
     logger.info(f"MCP Request: method={method}, id={jsonrpc_id}")
 
@@ -77,7 +113,7 @@ async def handle_mcp_endpoint(
 
     # Method 2: notifications/initialized
     elif method == "notifications/initialized":
-        return Response(status_code=204)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     # Method 3: ping
     elif method == "ping":

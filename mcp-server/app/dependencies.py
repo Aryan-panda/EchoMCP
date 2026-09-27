@@ -1,4 +1,5 @@
 from functools import lru_cache
+from fastapi import Depends
 from app.config import settings
 from app.services.providers.cosyvoice import CosyVoiceProvider
 from app.services.providers.base import TTSProvider
@@ -18,9 +19,13 @@ def get_audio_service() -> AudioService:
 def get_voice_service() -> VoiceService:
     return VoiceService(voices_dir=settings.voices_path)
 
-def get_speech_service() -> SpeechService:
+def get_speech_service(
+    tts_provider: TTSProvider = Depends(get_tts_provider),
+    audio_service: AudioService = Depends(get_audio_service),
+    voice_service: VoiceService = Depends(get_voice_service),
+) -> SpeechService:
     return SpeechService(
-        tts_provider=get_tts_provider(),
-        audio_service=get_audio_service(),
-        voice_service=get_voice_service(),
+        tts_provider=tts_provider,
+        audio_service=audio_service,
+        voice_service=voice_service,
     )
