@@ -24,13 +24,17 @@ class SynthesisStatus(str, Enum):
     FAILED = "failed"
 
 class EmotionSegment(BaseModel):
-    text: str = Field(..., min_length=1)
-    emotion: SupportedEmotion = Field(default=SupportedEmotion.NEUTRAL)
-    pause_ms: int = Field(default=0, ge=0)
+    text: str = Field(..., min_length=1, description="Clean text segment to synthesize")
+    emotion: SupportedEmotion = Field(default=SupportedEmotion.NEUTRAL, description="Target emotion classification")
+    instruction: Optional[str] = Field(default=None, description="Natural language prompt for CosyVoice inference_instruct")
+    speed_multiplier: float = Field(default=1.0, ge=0.5, le=2.0, description="Relative tempo multiplier")
+    pitch_shift: float = Field(default=1.0, ge=0.5, le=2.0, description="Relative pitch shift multiplier")
+    pause_ms: int = Field(default=0, ge=0, description="Trailing inter-segment silence in ms")
 
 class ParsedSpeech(BaseModel):
     raw_text: str
     clean_text: str
+    leading_pause_ms: int = Field(default=0, ge=0, description="Initial silence before first segment")
     segments: list[EmotionSegment]
 
 class SpeechRequest(BaseModel):

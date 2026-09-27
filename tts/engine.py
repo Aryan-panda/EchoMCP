@@ -50,12 +50,33 @@ class CosyVoiceEngine:
 
         # Base pitch modulation conditioned on reference voice or emotion
         base_freq = 220.0  # Default fundamental frequency
-        if emotion == "excited" or emotion == "happy":
-            base_freq = 260.0
+        amplitude = 9000.0
+        vibrato_rate = 0.0
+        vibrato_depth = 0.0
+        attack_time = 0.05
+        release_time = 0.08
+        fourth_harmonic = 0.0
+
+        if emotion in ["excited", "happy"]:
+            base_freq = 270.0 if emotion == "excited" else 250.0
+            attack_time = 0.03
+        elif emotion in ["amused", "laughing", "laughter"]:
+            base_freq = 240.0
+            vibrato_rate = 6.0  # 6 Hz gentle wobble for laughter/amusement
+            vibrato_depth = 8.0
+        elif emotion == "angry":
+            base_freq = 210.0
+            attack_time = 0.01  # Sharp, aggressive onset
+            amplitude = 11000.0
+            fourth_harmonic = 0.35  # Richer, tense harmonic spectrum
         elif emotion == "sad":
-            base_freq = 190.0
+            base_freq = 185.0
+            attack_time = 0.08
+            release_time = 0.15
+            amplitude = 6500.0
         elif emotion == "whisper":
-            base_freq = 160.0
+            base_freq = 150.0
+            amplitude = 3000.0
 
         # Read reference voice characteristics if reference.wav is present
         if reference_wav_path and reference_wav_path.exists():
@@ -81,23 +102,21 @@ class CosyVoiceEngine:
             frames = bytearray()
             for i in range(num_samples):
                 t = i / self.sample_rate
-                # Multi-harmonic vocal tract synthesis
-                h1 = math.sin(2.0 * math.pi * base_freq * t)
-                h2 = 0.5 * math.sin(2.0 * math.pi * (base_freq * 2.0) * t)
-                h3 = 0.25 * math.sin(2.0 * math.pi * (base_freq * 3.0) * t)
-                vocal = (h1 + h2 + h3) / 1.75
+                f = base_freq + (vibrato_depth * math.sin(2.0 * math.pi * vibrato_rate * t) if vibrato_rate else 0.0)
 
-                # Articulation envelope: soft attack, sustained body, gentle release
-                attack = min(1.0, i / (0.05 * self.sample_rate))
-                release = min(1.0, (num_samples - i) / (0.08 * self.sample_rate))
+                # Multi-harmonic vocal tract synthesis
+                h1 = math.sin(2.0 * math.pi * f * t)
+                h2 = 0.5 * math.sin(2.0 * math.pi * (f * 2.0) * t)
+                h3 = 0.25 * math.sin(2.0 * math.pi * (f * 3.0) * t)
+                h4 = fourth_harmonic * math.sin(2.0 * math.pi * (f * 4.0) * t)
+                vocal = (h1 + h2 + h3 + h4) / (1.75 + fourth_harmonic)
+
+                # Articulation envelope: attack, sustained body, release
+                attack = min(1.0, i / (attack_time * self.sample_rate))
+                release = min(1.0, (num_samples - i) / (release_time * self.sample_rate))
                 env = attack * release
 
-                # Whisper adds slight turbulence/breath noise
-                if emotion == "whisper":
-                    sample_val = int(env * 3000.0 * vocal)
-                else:
-                    sample_val = int(env * 9000.0 * vocal)
-
+                sample_val = int(env * amplitude * vocal)
                 clamped = max(-32768, min(32767, sample_val))
                 frames.extend(struct.pack("<h", clamped))
 
