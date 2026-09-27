@@ -128,6 +128,7 @@ export const App: React.FC = () => {
               currentAudio={currentAudio}
               onSelectAudio={(item) => setCurrentAudio(item)}
               onItemDeleted={fetchHistory}
+              onCleanupTriggered={fetchHistory}
             />
           </div>
         </div>

@@ -18,6 +18,8 @@ export interface VoiceMetadata {
   reference_file: string;
   transcript?: string;
   sample_rate: number;
+  channels?: number;
+  duration_seconds?: number;
   created_at: string;
   status: 'ready' | 'missing' | 'processing' | 'error';
 }
@@ -33,6 +35,7 @@ export interface AudioItem {
   created_at: string;
   audio_url: string;
   file_url: string;
+  status?: string;
 }
 
 export interface PaginatedAudioResponse {
@@ -110,6 +113,15 @@ export const api = {
       method: 'DELETE',
     });
     if (!res.ok) throw new Error('Failed to delete audio');
+  },
+
+  async cleanupAudio(days?: number): Promise<{ status: string; deleted_count: number }> {
+    const query = days !== undefined ? `?days=${days}` : '';
+    const res = await fetch(`${API_BASE}/api/v1/audio/cleanup${query}`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error('Failed to trigger retention cleanup');
+    return res.json();
   },
 
   getAudioFileUrl(audioId: string): string {
