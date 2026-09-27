@@ -1,4 +1,5 @@
 import time
+import asyncio
 import logging
 from typing import Optional
 from app.config import settings
@@ -28,6 +29,7 @@ class SpeechService:
         self.tts = tts_provider
         self.audio = audio_service
         self.voices = voice_service
+        self._semaphore = asyncio.Semaphore(1)
 
     async def speak(self, req: SpeechRequest, request_id: Optional[str] = None) -> tuple[SpeechResponse, LatencyMetrics]:
         req_id = request_id or generate_request_id()
@@ -46,17 +48,18 @@ class SpeechService:
         if not self.voices.is_voice_ready(voice_id):
             logger.warning(f"Voice reference for {voice_id} missing; synthesis proceeding with default parameters.")
 
-        # Step 3: Invoke TTS synthesis
+        # Step 3: Invoke TTS synthesis protected by concurrency semaphore
         t_tts_start = time.perf_counter()
         primary_emotion = parsed.segments[0].emotion.value if parsed.segments else None
         
-        audio_bytes, meta = await self.tts.synthesize(
-            text=parsed.clean_text,
-            voice_id=voice_id,
-            speed=req.speed,
-            format=req.format.value,
-            emotion=primary_emotion,
-        )
+        async with self._semaphore:
+            audio_bytes, meta = await self.tts.synthesize(
+                text=parsed.clean_text,
+                voice_id=voice_id,
+                speed=req.speed,
+                format=req.format.value,
+                emotion=primary_emotion,
+            )
         t_tts_end = time.perf_counter()
         tts_latency_ms = (t_tts_end - t_tts_start) * 1000.0
 
