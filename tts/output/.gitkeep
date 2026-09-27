@@ -1,0 +1,4 @@
+# Keep output directory in git
+*
+!.gitkeep
+!metadata/

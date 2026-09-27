@@ -1,0 +1,87 @@
+services:
+  tts:
+    container_name: echomcp-tts
+    build:
+      context: ./tts
+      dockerfile: Dockerfile
+    environment:
+      - TTS_HOST=0.0.0.0
+      - TTS_PORT=8080
+      - TTS_DEVICE=${TTS_DEVICE:-cpu}
+    volumes:
+      - ./tts/models:/app/models
+      - ./tts/voices:/app/voices
+      - ./tts/output:/app/output
+    networks:
+      - grok-voice-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health').read()"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    restart: unless-stopped
+
+  mcp-server:
+    container_name: echomcp-server
+    build:
+      context: ./mcp-server
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - APP_ENV=${APP_ENV:-development}
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=3001
+      - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:-change-me}
+      - TTS_BASE_URL=http://tts:8080
+      - DEFAULT_VOICE_ID=${DEFAULT_VOICE_ID:-1}
+      - MAX_TEXT_LENGTH=${MAX_TEXT_LENGTH:-5000}
+      - MAX_AUDIO_SECONDS=${MAX_AUDIO_SECONDS:-120}
+      - DEFAULT_AUDIO_FORMAT=${DEFAULT_AUDIO_FORMAT:-wav}
+      - DEFAULT_SPEED=${DEFAULT_SPEED:-1.0}
+      - AUDIO_RETENTION_ENABLED=${AUDIO_RETENTION_ENABLED:-false}
+      - AUDIO_RETENTION_DAYS=${AUDIO_RETENTION_DAYS:-30}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - STORAGE_VOICES_DIR=/app/tts/voices
+      - STORAGE_OUTPUT_DIR=/app/tts/output
+    volumes:
+      - ./tts/voices:/app/tts/voices
+      - ./tts/output:/app/tts/output
+    depends_on:
+      tts:
+        condition: service_healthy
+    networks:
+      - grok-voice-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3001/health').read()"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    restart: unless-stopped
+
+  frontend:
+    container_name: echomcp-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+    networks:
+      - grok-voice-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:80/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    restart: unless-stopped
+
+networks:
+  grok-voice-network:
+    name: grok-voice-network
+    driver: bridge
