@@ -8,20 +8,26 @@ from app.services.providers.mock import MockTTSProvider
 from app.services.audio_service import AudioService
 from app.services.voice_service import VoiceService
 
-@pytest.fixture(scope="session")
-def test_dirs(tmp_path_factory):
-    base = tmp_path_factory.mktemp("echomcp_test")
+@pytest.fixture
+def test_dirs(tmp_path):
+    base = tmp_path / "echomcp_test"
+    base.mkdir(parents=True, exist_ok=True)
     voices_dir = base / "voices"
     output_dir = base / "output"
     
-    voices_dir.mkdir(parents=True)
+    voices_dir.mkdir(parents=True, exist_ok=True)
     v1_dir = voices_dir / "1"
-    v1_dir.mkdir(parents=True)
-    (v1_dir / "reference.wav").write_bytes(b"RIFFdummywavbytes")
+    v1_dir.mkdir(parents=True, exist_ok=True)
+    # Write valid WAV header + sample frames (> 44 bytes)
+    dummy_wav = (
+        b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x22\x56\x00\x00\x44\xac\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
+        + b"\x00" * 100
+    )
+    (v1_dir / "reference.wav").write_bytes(dummy_wav)
     (v1_dir / "metadata.json").write_text('{"voice_id": "1", "name": "Voice 1"}')
 
-    output_dir.mkdir(parents=True)
-    (output_dir / "metadata").mkdir(parents=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "metadata").mkdir(parents=True, exist_ok=True)
 
     return {"voices": voices_dir, "output": output_dir}
 

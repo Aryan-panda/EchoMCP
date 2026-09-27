@@ -15,6 +15,8 @@ class VoiceMetadata(BaseModel):
     reference_file: str = Field(default="reference.wav")
     transcript: Optional[str] = None
     sample_rate: int = 22050
+    channels: int = 1
+    duration_seconds: Optional[float] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     status: VoiceStatus = VoiceStatus.READY
 
