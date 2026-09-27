@@ -35,3 +35,8 @@ class TTSProvider(ABC):
     async def delete_voice(self, voice_id: str) -> bool:
         """Delete a registered voice profile."""
         pass
+
+    @abstractmethod
+    async def list_voices(self) -> list[dict]:
+        """List registered voice profiles."""
+        pass

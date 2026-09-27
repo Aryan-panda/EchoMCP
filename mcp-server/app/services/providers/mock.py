@@ -58,3 +58,9 @@ class MockTTSProvider(TTSProvider):
             del self.registered_voices[voice_id]
             return True
         return False
+
+    async def list_voices(self) -> list[dict]:
+        return [
+            {"voice_id": vid, "name": name, "status": "ready"}
+            for vid, name in self.registered_voices.items()
+        ]

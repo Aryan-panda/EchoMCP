@@ -75,7 +75,12 @@ def register_voice(voice_id: str = "1", name: str = "Voice 1"):
     logger.info(f"Registered voice profile {voice_id} ({name})")
     return {"voice_id": voice_id, "name": name, "status": "ready"}
 
+@app.get("/voices")
+def list_voices():
+    return [{"voice_id": "1", "name": "Voice 1", "status": "ready"}]
+
 @app.delete("/voices/{voice_id}")
 def delete_voice(voice_id: str):
     logger.info(f"Deleted voice profile {voice_id}")
     return {"voice_id": voice_id, "status": "deleted"}
+

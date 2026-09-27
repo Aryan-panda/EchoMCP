@@ -68,3 +68,13 @@ class CosyVoiceProvider(TTSProvider):
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.delete(f"{self.base_url}/voices/{voice_id}")
             return resp.status_code == 200
+
+    async def list_voices(self) -> list[dict]:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            try:
+                resp = await client.get(f"{self.base_url}/voices")
+                if resp.status_code == 200:
+                    return resp.json()
+            except Exception as e:
+                logger.warning(f"Error fetching voices from TTS service: {e}")
+            return [{"voice_id": "1", "name": "Voice 1", "status": "ready"}]
