@@ -1,6 +1,7 @@
+import os
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 from app.config import settings
@@ -12,7 +13,7 @@ logger = logging.getLogger("echomcp.audio_service")
 
 class AudioService:
     def __init__(self, output_dir: Optional[Path] = None):
-        self.output_dir = output_dir or settings.output_path
+        self.output_dir = Path(output_dir or settings.output_path).resolve()
         self.metadata_dir = self.output_dir / "metadata"
         self._ensure_dirs()
 
@@ -97,16 +98,27 @@ class AudioService:
             return full_path
         return None
 
-    def list_audio(self, page: int = 1, limit: int = 20) -> PaginatedAudioResponse:
+    def list_audio(
+        self,
+        page: int = 1,
+        limit: int = 20,
+        voice_id: Optional[str] = None
+    ) -> PaginatedAudioResponse:
         """List stored audio records with pagination, newest first."""
         records: list[AudioMetadata] = []
         if self.metadata_dir.exists():
             for meta_file in sorted(self.metadata_dir.glob("aud_*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
                 try:
                     data = json.loads(meta_file.read_text(encoding="utf-8"))
-                    records.append(AudioMetadata(**data))
+                    record = AudioMetadata(**data)
+                    if voice_id and record.voice_id != voice_id:
+                        continue
+                    records.append(record)
                 except Exception as e:
                     logger.warning(f"Skipping malformed metadata {meta_file}: {e}")
+
+        # Ensure sorted newest created_at first
+        records.sort(key=lambda r: r.created_at, reverse=True)
 
         total = len(records)
         start = (page - 1) * limit
@@ -125,6 +137,7 @@ class AudioService:
                 created_at=r.created_at,
                 audio_url=f"/api/v1/audio/{r.audio_id}",
                 file_url=f"/api/v1/audio/{r.audio_id}/file",
+                status=r.status,
             )
             for r in page_items
         ]
@@ -150,7 +163,64 @@ class AudioService:
             audio_path = self.output_dir / meta.file_path
             if audio_path.exists():
                 audio_path.unlink()
+                # Clean up parent directory if empty
+                parent_dir = audio_path.parent
+                if parent_dir != self.output_dir and not any(parent_dir.iterdir()):
+                    try:
+                        parent_dir.rmdir()
+                    except OSError:
+                        pass
 
         meta_file.unlink()
         logger.info(f"Deleted audio record {audio_id}")
         return True
+
+    def cleanup_old_records(self, retention_days: Optional[int] = None) -> int:
+        """
+        Delete audio files and metadata older than retention_days.
+        If retention_days is None, uses settings.AUDIO_RETENTION_DAYS.
+        Cleans up empty dated directories afterwards.
+        Returns count of removed records.
+        """
+        days = retention_days if retention_days is not None else settings.AUDIO_RETENTION_DAYS
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        deleted_count = 0
+
+        if not self.metadata_dir.exists():
+            return 0
+
+        for meta_file in list(self.metadata_dir.glob("aud_*.json")):
+            try:
+                data = json.loads(meta_file.read_text(encoding="utf-8"))
+                created_at_str = data.get("created_at")
+                if created_at_str:
+                    created_at = datetime.fromisoformat(created_at_str)
+                    if created_at.tzinfo is None:
+                        created_at = created_at.replace(tzinfo=timezone.utc)
+                else:
+                    created_at = datetime.fromtimestamp(meta_file.stat().st_mtime, tz=timezone.utc)
+
+                if created_at < cutoff:
+                    audio_id = data.get("audio_id", meta_file.stem)
+                    if self.delete_audio(audio_id):
+                        deleted_count += 1
+            except Exception as e:
+                logger.warning(f"Error during retention evaluation of {meta_file}: {e}")
+
+        # Prune empty date directories
+        self._prune_empty_dirs()
+        logger.info(f"Retention cleanup finished: {deleted_count} records purged (retention: {days} days)")
+        return deleted_count
+
+    def _prune_empty_dirs(self):
+        """Recursively remove empty date directories in output_dir, preserving metadata dir."""
+        for root, dirs, files in os.walk(str(self.output_dir), topdown=False):
+            root_path = Path(root)
+            if root_path == self.output_dir or root_path == self.metadata_dir:
+                continue
+            try:
+                if not any(root_path.iterdir()):
+                    root_path.rmdir()
+            except OSError:
+                pass
+

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel, Field
-from app.models.speech import AudioFormat
+from app.models.speech import AudioFormat, SynthesisStatus
 
 class AudioMetadata(BaseModel):
     audio_id: str
@@ -14,6 +14,7 @@ class AudioMetadata(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     file_path: str
     file_size_bytes: int = 0
+    status: SynthesisStatus = SynthesisStatus.COMPLETED
 
 class AudioSummaryItem(BaseModel):
     audio_id: str
@@ -26,6 +27,7 @@ class AudioSummaryItem(BaseModel):
     created_at: datetime
     audio_url: str
     file_url: str
+    status: SynthesisStatus = SynthesisStatus.COMPLETED
 
 class PaginatedAudioResponse(BaseModel):
     total: int = Field(..., ge=0)

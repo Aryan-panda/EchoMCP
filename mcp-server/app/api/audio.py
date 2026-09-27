@@ -5,15 +5,26 @@ from app.services.audio_service import AudioService
 from app.models.audio import PaginatedAudioResponse, AudioMetadata
 from app.utils.ids import is_valid_audio_id
 
+from typing import Optional
+
 router = APIRouter(prefix="/api/v1/audio", tags=["Audio"])
 
 @router.get("", response_model=PaginatedAudioResponse)
 def list_audio(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
+    voice_id: Optional[str] = Query(default=None),
     audio_svc: AudioService = Depends(get_audio_service),
 ):
-    return audio_svc.list_audio(page=page, limit=limit)
+    return audio_svc.list_audio(page=page, limit=limit, voice_id=voice_id)
+
+@router.post("/cleanup")
+def cleanup_audio(
+    days: Optional[int] = Query(default=None, ge=0),
+    audio_svc: AudioService = Depends(get_audio_service),
+):
+    count = audio_svc.cleanup_old_records(retention_days=days)
+    return {"status": "ok", "deleted_count": count}
 
 @router.get("/{audio_id}", response_model=AudioMetadata)
 def get_audio_metadata(
