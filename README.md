@@ -66,25 +66,6 @@ Audio Playback / Replay (Local Web Dashboard :3000)
 
 ---
 
-## 🚦 Development Phases
-
-| Phase | Description | Status |
-| :--- | :--- | :--- |
-| **Phase 0** | Architecture, Contracts & System Specifications | **COMPLETED & APPROVED** |
-| **Phase 1** | Repository & Docker Foundation (Scaffolding & Healthchecks) | Pending Phase 0 Review |
-| **Phase 2** | Real MCP Server (`POST /mcp`, Auth & Tool Dispatch) | Upcoming |
-| **Phase 3** | TTS Abstraction (`TTSProvider` & `MockTTSProvider`) | Upcoming |
-| **Phase 4** | Real Local TTS (CosyVoice 3 Integration) | Upcoming |
-| **Phase 5** | Voice ID 1 Reference Registration & Cloning | Upcoming |
-| **Phase 6** | Emotion & Prosody Parser with Vocabulary Tests | Upcoming |
-| **Phase 7** | Durable Audio Persistence & Replay Engine | Upcoming |
-| **Phase 8** | Web Administration Dashboard (React + TypeScript) | Upcoming |
-| **Phase 9** | Cloudflare Tunnel & Secure Public Ingress | Upcoming |
-| **Phase 10** | Live Grok Consumer Chat MCP Integration | Upcoming |
-| **Phase 11** | End-to-End Hardening & Failure Recovery | Upcoming |
-
----
-
 ## 🔒 Security Posture
 
 - **Bearer Authentication:** Public MCP endpoint strictly enforces `Authorization: Bearer <MCP_AUTH_TOKEN>`.
