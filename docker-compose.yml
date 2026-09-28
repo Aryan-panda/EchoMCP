@@ -8,6 +8,16 @@ services:
       - TTS_HOST=0.0.0.0
       - TTS_PORT=8080
       - TTS_DEVICE=${TTS_DEVICE:-cpu}
+      - TTS_HOME=/app/models
+      - COQUI_TOS_AGREED=1
+    # On an NVIDIA GPU PC, uncomment below for full CUDA hardware acceleration:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
     volumes:
       - ./tts/models:/app/models
       - ./tts/voices:/app/voices

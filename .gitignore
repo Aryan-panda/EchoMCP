@@ -58,11 +58,11 @@ tts/output/*
 !tts/output/.gitkeep
 !tts/output/metadata/.gitkeep
 
-# Reference voices uploaded dynamically
+# Reference voices uploaded dynamically (Voice 1 is tracked as default)
 tts/voices/*
-!tts/voices/.gitkeep
-!tts/voices/1/.gitkeep
-!tts/voices/1/metadata.json
+!tts/voices/1/
+!tts/voices/1/**
+
 
 # IDE & Editor files
 .vscode/
@@ -83,3 +83,7 @@ coverage.xml
 # Logs
 *.log
 logs/
+
+# Local test scratch
+mcp-server/tts/
+
