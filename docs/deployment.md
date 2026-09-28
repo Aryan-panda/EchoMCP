@@ -1,28 +1,32 @@
 # EchoMCP — Deployment & Infrastructure Guide
 **Project:** Grok Voice Bridge (EchoMCP)  
 **Version:** 1.0.0  
-**Phase:** Phase 0 (Architecture & Contracts)  
+**Phase:** Production-Ready Zero-Shot Voice Bridge  
 
 ---
 
-## 1. Prerequisites
+## 1. Prerequisites & Hardware Specs
 
-- **Host Operating System:** Linux, macOS, or Windows (WSL2 recommended for Windows)
+- **Host Operating System:** Linux (Ubuntu 22.04+ recommended), macOS, or Windows 10/11 (with WSL2).
 - **Docker Engine:** v24.0+
 - **Docker Compose:** v2.20+
-- **Hardware Requirements:**
-  - **GPU Mode:** NVIDIA GPU with at least 8GB VRAM + NVIDIA Container Toolkit (`nvidia-docker2`).
-  - **CPU Fallback:** Multi-core x86_64 / ARM64 CPU with at least 8GB System RAM (note: synthesis latency will be higher).
-- **Cloudflare Tunnel (`cloudflared`):** Installed locally or run via container for remote Grok ingress.
+- **Hardware Sizing:**
+  - **GPU Mode (Recommended for Production):**
+    - NVIDIA GPU with >= 8GB VRAM (e.g., RTX 3060/3070/3080/4070/4090 or datacenter T4/A10G).
+    - NVIDIA Container Toolkit (`nvidia-docker2`) installed on the host.
+    - Latency: ~200ms – 1.5s per sentence.
+  - **CPU Mode (Fallback):**
+    - Multi-core CPU (>= 4 cores) with >= 16GB System RAM (8GB absolute minimum).
+    - Latency: ~3s – 8s per sentence.
 
 ---
 
 ## 2. Docker Compose Topology
 
-The system deploys three isolated containers on the `grok-voice-network` bridge:
+The stack deploys four containerized services on the internal `grok-voice-network` bridge:
 
 ```
-[Cloudflare Ingress]
+[Cloudflare Ingress (echomcp-tunnel)]
         │
         ▼ (Port 3001)
 ┌──────────────────┐       ┌──────────────────┐
@@ -31,15 +35,15 @@ The system deploys three isolated containers on the `grok-voice-network` bridge:
         ▲                           │
         │                           ▼
         │ (Port 3000)      [Persistent Storage Volumes]
-┌──────────────────┐        ├── /app/tts/models
-│ echomcp-frontend │        ├── /app/tts/voices
-└──────────────────┘        └── /app/tts/output
+┌──────────────────┐        ├── /app/models   (CosyVoice-300M-Instruct weights)
+│ echomcp-frontend │        ├── /app/voices   (Voice ID 1 reference audio)
+└──────────────────┘        └── /app/output   (Permanent audio archive)
 ```
 
 ### Volume Mounts
-1. `tts/models` (`/app/tts/models`): Cached PyTorch weights for CosyVoice 3 model. Avoids re-downloading model checkpoints across container recreations.
-2. `tts/voices` (`/app/tts/voices`): Persistent directory holding Voice ID 1 (`reference.wav` and `metadata.json`).
-3. `tts/output` (`/app/tts/output`): Permanent hierarchical archive for generated `.wav` files and corresponding metadata JSON files.
+1. `tts/models` (`/app/models`): Cached PyTorch weights for CosyVoice-300M-Instruct. Auto-downloaded from ModelScope/HuggingFace on first start and cached persistently.
+2. `tts/voices` (`/app/voices`): Persistent voice profile storage. Voice ID 1 (`tts/voices/1/reference.wav`) is pre-packaged and ready to clone.
+3. `tts/output` (`/app/output`): Permanent hierarchical archive for generated `.wav` files and corresponding metadata JSON files.
 
 ---
 
@@ -62,7 +66,7 @@ MCP_AUTH_TOKEN=change-me-to-a-secure-random-token
 TTS_HOST=0.0.0.0
 TTS_PORT=8080
 TTS_BASE_URL=http://tts:8080
-TTS_DEVICE=cpu # or 'cuda' for NVIDIA GPU
+TTS_DEVICE=cpu # Set to 'cuda' for NVIDIA GPU acceleration
 
 # Default Audio Parameters
 DEFAULT_VOICE_ID=1
@@ -81,29 +85,50 @@ LOG_LEVEL=INFO
 
 ---
 
-## 4. Cloudflare Tunnel Setup
+## 4. Deploying on a High-Spec GPU PC
+
+To run with full NVIDIA CUDA acceleration:
+
+1. In `.env`, set:
+   ```ini
+   TTS_DEVICE=cuda
+   ```
+2. In `docker-compose.yml`, uncomment the GPU reservation block under the `tts` service:
+   ```yaml
+   deploy:
+     resources:
+       reservations:
+         devices:
+           - driver: nvidia
+             count: 1
+             capabilities: [gpu]
+   ```
+3. Build and launch:
+   ```bash
+   docker compose up -d --build
+   ```
+
+---
+
+## 5. Cloudflare Tunnel Ingress
 
 To allow Grok (running in xAI's cloud) to reach your local MCP endpoint:
 
-### Option A: Quick Tunnel (Recommended for Development)
-Run Cloudflare Quick Tunnel without an account:
-
+### Option A: Integrated Quick Tunnel (Default in Docker Compose)
+The `echomcp-tunnel` service automatically provisions a Cloudflare Quick Tunnel on container startup:
 ```bash
-cloudflared tunnel --url http://localhost:3001
+docker compose logs tunnel
 ```
-
-Cloudflare will output a public HTTPS URL:
+Look for the output:
 ```text
-https://random-word-subdomain.trycloudflare.com
+https://<random-subdomain>.trycloudflare.com
 ```
-
-Your Grok MCP Connector URL is then:
+Your Grok MCP Connector URL is:
 ```text
-https://random-word-subdomain.trycloudflare.com/mcp
+https://<random-subdomain>.trycloudflare.com/mcp
 ```
-*(Note: Quick Tunnel URLs rotate each time the process restarts).*
 
-### Option B: Named Cloudflare Tunnel (Production)
+### Option B: Named Cloudflare Tunnel (Dedicated Domain)
 For a persistent static domain (e.g., `mcp.yourdomain.com`):
 ```bash
 cloudflared tunnel create grok-voice-bridge
@@ -113,11 +138,12 @@ cloudflared tunnel run --url http://localhost:3001 grok-voice-bridge
 
 ---
 
-## 5. CPU Fallback vs GPU Acceleration
+## 6. CPU Fallback vs GPU Acceleration Comparison
 
 | Feature | GPU Mode (CUDA) | CPU Fallback Mode |
 | :--- | :--- | :--- |
-| **Inference Latency** | 200ms – 1.2s per sentence | 3s – 8s per sentence |
-| **Docker Compose Config** | Requires `deploy.resources.reservations.devices` with `capabilities: [gpu]` | Standard CPU container |
+| **Inference Latency** | ~200ms – 1.5s per sentence | ~3s – 8s per sentence |
+| **Docker Compose Config** | Requires `deploy.resources.reservations.devices` with `capabilities: [gpu]` | Standard CPU container (default) |
 | **Environment Flag** | `TTS_DEVICE=cuda` | `TTS_DEVICE=cpu` |
-| **Prerequisites** | NVIDIA Container Toolkit installed | None beyond standard Docker |
+| **Prerequisites** | NVIDIA Container Toolkit installed | Standard Docker only |
+

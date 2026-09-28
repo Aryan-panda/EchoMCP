@@ -86,7 +86,7 @@
   ┌──────────────────────────────────────────┐          │
   │           TTS SERVICE (:8080)            │          │
   │  - Isolated container (No Public Access) │          │
-  │  - Model: CosyVoice 3 (PyTorch)          │          │
+  │  - Model: CosyVoice-300M-Instruct (PyTorch)│          │
   │  - Reference Voice 1: reference.wav      │          │
   │  - Output: 22050Hz/24000Hz PCM/WAV       │          │
   └──────────────────────┬───────────────────┘          │
@@ -167,7 +167,7 @@ The system consists of three distinct containerized services connected by a cust
 | Service | Container Name | Internal Port | Exposed Port | Purpose | Security Posture |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **MCP Server** | `echomcp-server` | `3001` | `3001:3001` | FastAPI, MCP Streamable HTTP, Auth, Speech Orchestration | **Ingress Target:** Exposed to localhost and proxied by Cloudflare Tunnel with Bearer Token auth. |
-| **TTS Service** | `echomcp-tts` | `8080` | `None` (Internal Only) | PyTorch, CosyVoice 3 model server, audio synthesis | **Isolated:** Strictly internal to `grok-voice-network`. NEVER mapped to host or public internet. |
+| **TTS Service** | `echomcp-tts` | `8080` | `None` (Internal Only) | PyTorch, CosyVoice-300M-Instruct neural engine, audio synthesis | **Isolated:** Strictly internal to `grok-voice-network`. NEVER mapped to host or public internet. |
 | **Web Dashboard**| `echomcp-frontend` | `80` (or `3000`) | `3000:80` | React/Vite SPA for system administration and audio replay | **Local Only:** Bound to `127.0.0.1:3000`. Not proxied via Cloudflare. |
 
 ### Ingress & Cloudflare Tunnel Scope

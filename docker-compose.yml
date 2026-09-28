@@ -7,9 +7,11 @@ services:
     environment:
       - TTS_HOST=0.0.0.0
       - TTS_PORT=8080
-      - TTS_DEVICE=${TTS_DEVICE:-cpu}
-      - TTS_HOME=/app/models
-      - COQUI_TOS_AGREED=1
+      - TTS_DEVICE=${TTS_DEVICE:-cuda}
+      - MODELS_DIR=/app/models
+      - VOICES_DIR=/app/voices
+      - OUTPUT_DIR=/app/output
+      - COSYVOICE_MODEL=CosyVoice-300M-Instruct
     # On an NVIDIA GPU PC, uncomment below for full CUDA hardware acceleration:
     # deploy:
     #   resources:

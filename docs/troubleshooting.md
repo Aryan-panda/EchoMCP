@@ -16,7 +16,7 @@ Issue Detected
   │
   ├── Audio synthesis returns HTTP 503 / TTSUnavailableError
   │     ├── Check TTS container status: `docker compose ps`
-  │     ├── Verify CosyVoice model weights downloaded to `tts/models`
+  │     ├── Verify CosyVoice-300M-Instruct weights downloaded to `tts/models`
   │     └── Check GPU memory (OOM) or CPU starvation in TTS container logs
   │
   ├── Voice ID 1 returns 404 / VoiceNotFoundError

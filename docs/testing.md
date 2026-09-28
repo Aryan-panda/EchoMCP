@@ -54,7 +54,7 @@ tests/
 | **Phase 1** | Scaffolding & Docker | `docker compose up -d`, health probes | All 3 containers pass health checks |
 | **Phase 2** | MCP Server & Auth | `pytest mcp-server/tests/contract/` | MCP discovery & tool invocation succeed |
 | **Phase 3** | TTS Abstraction | `pytest mcp-server/tests/providers/` | Mock provider conforms to `TTSProvider` |
-| **Phase 4** | Real TTS (CosyVoice) | `pytest mcp-server/tests/integration/test_tts_synthesis.py` | Audio output is synthesized and valid WAV |
+| **Phase 4** | Real TTS (CosyVoice-300M-Instruct) | `pytest mcp-server/tests/integration/test_tts_synthesis.py` | Audio output is synthesized and valid WAV |
 | **Phase 5** | Voice ID 1 | `pytest mcp-server/tests/integration/test_api_voices.py` | Voice 1 cloning produces targeted speech |
 | **Phase 6** | Emotion / Prosody | `pytest mcp-server/tests/unit/test_emotion_parser.py` | 100% of emotion tags parsed and stripped |
 | **Phase 7** | Audio Store & Replay | `pytest mcp-server/tests/integration/test_api_audio.py` | Earlier audio remains playable after new calls |
